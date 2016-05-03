@@ -8,6 +8,7 @@ const isNeeded = /iPhone|iPod/i.test(navigator.userAgent);
 
 const ಠ = Symbol();
 const ಠevent = Symbol();
+const ಠload = Symbol('nativeload');
 const ಠplay = Symbol('nativeplay');
 const ಠpause = Symbol('nativepause');
 
@@ -57,9 +58,26 @@ function update(timeDiff) {
 	}
 }
 
+const syncSource = video => {
+	const player = video[ಠ];
+	const src = video.currentSrc || video.src;
+	const changed = (player.driver.src !== src);
+	if (changed) {
+		player.driver.src = src;
+		player.driver.load();
+	}
+	return changed;
+};
+
 /**
  * METHODS
  */
+
+function load() {
+	const video = this;
+	video[ಠload]();
+	syncSource(video);
+}
 
 function play() {
 	// console.log('play')
@@ -80,6 +98,8 @@ function play() {
 		video.load();
 	}
 
+	syncSource(video);
+
 	player.driver.play();
 	player.updater.start();
 
@@ -88,6 +108,7 @@ function play() {
 	// TODO: should be fired later
 	video.dispatchEvent(new Event('playing'));
 }
+
 function pause(forceEvents) {
 	// console.log('pause')
 	const video = this;
@@ -130,6 +151,7 @@ function addPlayer(video, hasAudio) {
 		player.driver = {
 			muted: true,
 			paused: true,
+			load: () => {},
 			pause: () => {
 				player.driver.paused = true;
 			},
@@ -146,17 +168,13 @@ function addPlayer(video, hasAudio) {
 		};
 	}
 
-	// .load() causes the emptied event
-	// the alternative is .play()+.pause() but that triggers play/pause events, even worse
-	// possibly the alternative is preventing this event only once
 	video.addEventListener('emptied', () => {
-		if (player.driver.src && player.driver.src !== video.src) {
-			// console.log('src changed', video.src);
+		const changed = syncSource(video);
+		if (changed) {
 			setTime(video, 0);
-			video.pause();
-			player.driver.src = video.src;
+			player.driver.pause();
 		}
-	}, false);
+	});
 
 	// stop programmatic player when OS takes over
 	video.addEventListener('webkitbeginfullscreen', () => {
@@ -192,8 +210,10 @@ function addPlayer(video, hasAudio) {
 
 function overloadAPI(video) {
 	const player = video[ಠ];
+	video[ಠload] = video.load;
 	video[ಠplay] = video.play;
 	video[ಠpause] = video.pause;
+	video.load = load;
 	video.play = play;
 	video.pause = pause;
 	proxyProperty(video, 'paused', player.driver);
